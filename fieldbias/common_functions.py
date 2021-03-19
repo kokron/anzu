@@ -1,8 +1,8 @@
-import pyfftw as fftw
+#import pyfftw as fftw
 import os
 import struct
 from collections import namedtuple
-from nbodykit.source.mesh import ArrayMesh
+#from nbodykit.source.mesh import ArrayMesh
 import psutil
 import numpy as np
 import gc
@@ -205,7 +205,29 @@ def delta_to_gradsqdelta(delta_k, nmesh, lbox):
     
     return ArrayMesh(gradsqdelta, BoxSize=lbox).to_real_field()
 
-def delta_to_tidesq(delta_k, nmesh, lbox, rank, nranks):
+def delta_to_tidesq(delta_k, nmesh, lbox, rank, nranks, fft):
+    '''
+    Computes the square tidal field from the density FFT
+    
+    s^2 = s_ij s_ij
+
+    where 
+
+    s_ij = (k_i k_j / k^2 - delta_ij / 3 ) * delta_k
+    
+    
+
+    Inputs:
+    delta_k: fft'd density, slab-decomposed. 
+    nmesh: size of the mesh
+    lbox: size of the box
+    rank: current MPI rank
+    nranks: total number of MPI ranks
+    fft: PFFT fourier transform object. Used to do the backwards FFT.
+
+    Outputs: 
+    tidesq: the s^2 field for the given slab.
+    '''
     #Assumes delta_k is a pyfftw fourier-transformed density contrast field
     #Computes the tidal tensor tau_ij = (k_i k_j/k^2  - delta_ij/3 )delta_k
     #Returns it as an nbodykit mesh

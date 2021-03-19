@@ -6,6 +6,7 @@ import gc
 import sys
 import h5py
 import yaml
+import os
 from common_functions import delta_to_tidesq, get_memory
 
 def MPI_mean(array):
@@ -82,7 +83,7 @@ if rank==0:
 deltak = u_hat.copy()
 if rank==0:
     print('Did array copy')
-tinyfft = delta_to_tidesq(deltak, nmesh, Lbox, rank, nranks)
+tinyfft = delta_to_tidesq(deltak, nmesh, Lbox, rank, nranks, fft)
 if rank==0:
     print('Made the tidesq field')
 
@@ -123,9 +124,11 @@ if configs['np_weightfields']:
             del arr
             gc.collect()
             get_memory()
+        #Deletes the hdf5 file 
+        os.system('rm '+lindir+'mpi_icfields_nmesh%s.h5'%nmesh)
 else: 
     if rank==0:
-        print('Wrote successfully! Took %d seconds'(time.time() - start_time))
+        print('Wrote successfully! Took %d seconds'%(time.time() - start_time))
 # if rank==0:
 # 	print(uj.shape)
 # 	assert np.allclose(uj, u)
