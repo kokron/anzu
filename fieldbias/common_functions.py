@@ -1,13 +1,8 @@
-import pyfftw as fftw
 import os
 import struct
 from collections import namedtuple
-from nbodykit.source.mesh import ArrayMesh
 import psutil
 import numpy as np
-import gc
-from mpi4py import MPI
-from mpi4py_fft import PFFT, newDistArray
 
 __all__ = ['readGadgetSnapshot', 'GadgetHeader']
 
@@ -134,126 +129,12 @@ def position_to_index(pos, lbox, nmesh):
     
     return (idvec%nmesh).astype('int16')
 
-def diracdelta(i, j):
+def kroneckerdelta(i, j):
     if i == j:
         return 1
     else:
         return 0
 
-# def delta_to_tidesq(delta_k, nmesh, lbox):
-#     #Assumes delta_k is a pyfftw fourier-transformed density contrast field
-#     #Computes the tidal tensor tau_ij = (k_i k_j/k^2  - delta_ij/3 )delta_k
-#     #Returns it as an nbodykit mesh
-#     kvals = np.fft.fftfreq(nmesh)*(2*np.pi*nmesh)/lbox
-#     kvalsr = np.fft.rfftfreq(nmesh)*(2*np.pi*nmesh)/lbox
-    
-#     kx, ky, kz = np.meshgrid(kvals, kvals, kvalsr)
-    
-    
-#     knorm = kx**2 + ky**2 + kz**2
-#     knorm[0][0][0] = 1
-#     klist = [[kx, kx], [kx, ky], [kx, kz], [ky, ky], [ky, kz], [kz, kz]]
-    
-#     del kx, ky, kz
-#     gc.collect()
-    
-    
-#     #Compute the symmetric tide at every Fourier mode which we'll reshape later
-    
-#     #Order is xx, xy, xz, yy, yz, zz
-    
-    
-#     jvec = [[0,0], [0,1], [0,2], [1,1], [1,2], [2,2]]
-#     tidesq = np.zeros(shape=(len(kvals), len(kvals), len(kvals)))
 
-#     for i in range(len(klist)):
-#         fft_tide = np.array((klist[i][0]*klist[i][1]/knorm - diracdelta(jvec[i][0], jvec[i][1])/3.) * (delta_k), dtype='complex64')
-#         print(fft_tide.shape, fft_tide.dtype)
-#         fft_tide = fftw.byte_align(fft_tide, fftw.simd_alignment, dtype='complex64')
-#         real_out = fft_tide.view('float32')[:,:,:nmesh]
-#         complex_in = fft_tide[:,:,:]
-#         print(fft_tide.shape, real_out.shape, complex_in.shape)
-#         transform = fftw.FFTW(complex_in, real_out, axes=(0,1,2),direction='FFTW_BACKWARD', threads=NTHREADS)
-#         transform()
-#         tidesq += real_out**2
-#         if jvec[i][0] != jvec[i][1]:
-#             tidesq+= real_out**2
-            
-#     del fft_tide
-#     gc.collect()
-     
-#     return ArrayMesh(tidesq, BoxSize=lbox).to_real_field()
-
-
-def delta_to_gradsqdelta(delta_k, nmesh, lbox):
-    
-    kvals = np.fft.fftfreq(nmesh)*(2*np.pi*nmesh)/lbox
-    kvalsr = np.fft.rfftfreq(nmesh)*(2*np.pi*nmesh)/lbox
-    
-    kx, ky, kz = np.meshgrid(kvals, kvals, kvalsr)
-    
-    
-    knorm = kx**2 + ky**2 + kz**2
-    knorm[0][0][0] = 1
-    
-    ksqdelta = knorm*delta_k
-    
-    ksqdelta = fftw.byte_align(ksqdelta, dtype='complex64')
-    
-    gradsqdelta = fftw.interfaces.numpy_fft.irfftn(ksqdelta, axes=[0,1,2], threads=-1)
-
-    
-    return ArrayMesh(gradsqdelta, BoxSize=lbox).to_real_field()
-
-def delta_to_tidesq(delta_k, nmesh, lbox, rank, nranks):
-    #Assumes delta_k is a pyfftw fourier-transformed density contrast field
-    #Computes the tidal tensor tau_ij = (k_i k_j/k^2  - delta_ij/3 )delta_k
-    #Returns it as an nbodykit mesh
-    kvals = np.fft.fftfreq(nmesh)*(2*np.pi*nmesh)/lbox
-    kvalsmpi = kvals[rank*nmesh//nranks:(rank+1)*nmesh//nranks]
-    kvalsr = np.fft.rfftfreq(nmesh)*(2*np.pi*nmesh)/lbox
-
-    kx, ky, kz = np.meshgrid(kvalsmpi,kvals,  kvalsr)
-    if rank==0:
-        print(kvals.shape, kvalsmpi.shape, kvalsr.shape, "shape of x, y, z")
-
-    knorm = kx**2 + ky**2 + kz**2
-    if knorm[0][0][0] == 0:
-        knorm[0][0][0] = 1
-
-    klist = [[kx, kx], [kx, ky], [kx, kz], [ky, ky], [ky, kz], [kz, kz]]
-
-    del kx, ky, kz
-    gc.collect()
-
-    #Compute the symmetric tide at every Fourier mode which we'll reshape later
-
-    #Order is xx, xy, xz, yy, yz, zz
-    jvec = [[0,0], [0,1], [0,2], [1,1], [1,2], [2,2]]
-    tidesq = np.zeros((nmesh//nranks,nmesh,nmesh), dtype='float32')
-
-    if rank==0:
-        get_memory()
-    for i in range(len(klist)):
-        karray = (klist[i][0]*klist[i][1]/knorm - diracdelta(jvec[i][0], jvec[i][1])/3.)
-        fft_tide = np.array(karray * (delta_k), dtype='complex64')
-
-        #this is the local sij
-        real_out = fft.backward(fft_tide)
-
-        if rank==0:
-            get_memory()
-        # fft_tide = fftw.byte_align(fft_tide, fftw.simd_alignment, dtype='complex64')
-        # real_out = fft_tide.view('float32')[:,:,:nmesh]
-        # complex_in = fft_tide[:,:,:]
-        # print(fft_tide.shape, real_out.shape, complex_in.shape)
-        tidesq += 1.*real_out**2
-        if jvec[i][0] != jvec[i][1]:
-            tidesq+= 1.*real_out**2
-            
-        del fft_tide, real_out
-        gc.collect()
-    # pass
-    return tidesq
 
 
