@@ -1,0 +1,50 @@
+##Locations of files
+
+#Location of the IC binary files
+icdir:
+
+#Output directory where all products should be saved
+outdir:
+
+#Directory with gadget snapshot files 
+particledir:
+
+##Simulation parameters
+
+#mesh size used to generate ICs
+nmesh_in:
+
+#mesh size to output the final fields/measure p(k)
+nmesh_out:
+
+#Size of the simulation box in Mpc/h
+lbox:
+
+#Initial redshift of the box
+z_ic:
+
+#Scale factor at the snapshot you're running the measurements
+snap_scale:
+
+##Advection paramters
+
+#Compensate for the CIC window functions or not
+compensate: True
+
+#'Gadget' or 'FastPM'. For now only 'Gadget' is supported. Sorry!
+sim_type: 'Gadget'
+
+#Also write the IC weight fields as numpy arrays and not only h5 files? This will just take up a lot of space!
+np_weightfields: False
+
+
+##Aemulus-specific params
+
+#Is this from the test set?
+test:
+
+#Which box is this? XXX in BoxXXX or TestBoxXXX-YYY
+box:
+#This is YYY
+testno: 
+
