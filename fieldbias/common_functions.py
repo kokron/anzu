@@ -1,6 +1,7 @@
 import os
 import struct
 from collections import namedtuple
+#from nbodykit.source.mesh import ArrayMesh
 import psutil
 import numpy as np
 
