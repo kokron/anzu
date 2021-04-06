@@ -46,7 +46,7 @@ yamldir = sys.argv[1]
 fieldnameadd = sys.argv[2]
 
 
-configs = yaml.load(open(yamldir, 'r'))
+configs = yaml.load(open(yamldir, 'r'), yaml.FullLoader)
 
 lindir = configs['outdir']
 
@@ -61,7 +61,7 @@ bigarr = []
 start_time = time.time()
 Lbox = configs['lbox']
 
-compensate = configs['compensate']
+compensate = bool(configs['compensate'])
 
 
 # fdir = '/oak/stanford/orgs/kipac/aemulus/aemulus_alpha/Box%03d/output/snapdir_%03d/snapshot_%03d.'%(boxno, snapdir, snapdir)
@@ -120,17 +120,20 @@ lenrand = 0
 
 #Load in a subset of the total gadget snapshot. 
 #TODO: this is hard-coded for Sherlock and Aemulus but should change for generic N-body sims.
-posvec = np.array([])
-idvec = np.array([])
 for i in range(16*rank, 16*(rank+1)):
-    gadgetsnap = readGadgetSnapshot(fdir+'%s'%i, read_idx=True, read_pos=True)
+    gadgetsnap = readGadgetSnapshot(fdir+'%s'%i, read_id=True, read_pos=True)
 
     gadgetpos = gadgetsnap[1]
 
     gadgetidx = gadgetsnap[2]
-
-    np.append(posvec, gadgetpos)
-    np.append(idvec, gadgetidx)
+    if i == 16*rank:
+        posvec = 1.*gadgetpos
+        idvec = 1.*gadgetidx
+        mpiprint('here!')
+        mpiprint(posvec.shape)
+    else:
+        posvec = np.vstack((posvec, gadgetpos))
+        idvec = np.hstack((idvec, gadgetidx))
     lenrand+=len(gadgetpos)
     del gadgetsnap
     gc.collect()
@@ -143,17 +146,22 @@ idfac = 1
 if configs['sim_type'] == 'FastPM':
     idfac = 0
 
-a_ic = ((gadgetidx-idfac)//nmesh**2)%nmesh 
-b_ic = ((gadgetidx-idfac)//nmesh)%nmesh
-c_ic = (gadgetidx-idfac)%nmesh
-
-
+a_ic = ((idvec-idfac)//nmesh**2)%nmesh
+b_ic = ((idvec-idfac)//nmesh)%nmesh
+c_ic = (idvec-idfac)%nmesh
+mpiprint(a_ic[3])
+a_ic = a_ic.astype(int)
+b_ic = b_ic.astype(int)
+c_ic = c_ic.astype(int)
 #Figure out where each particle position is going to be distributed among mpi ranks
 layout = pm.decompose(posvec)
 
 #Exchange positions
 p = layout.exchange(posvec)
 
+mpiprint(('posvec shapes', posvec.shape))
+
+mpiprint(('idvec shapes', idvec.shape))
 del posvec
 gc.collect()
 
@@ -178,6 +186,7 @@ for k in range(len(fieldlist)):
         w = arr[a_ic, b_ic, c_ic]
 
 
+        mpiprint(('w shapes', w.shape))
 
         #distribute weights properly
         m = layout.exchange(w)
@@ -245,6 +254,7 @@ z_ic=configs['z_ic']
 growthratio = pyccl.growth_factor(cosmo, [box_scale])/pyccl.growth_factor(cosmo, 1./(1+z_ic))
 #Vector to rescale component spectra with appropriate linear growth factors.
 D = growthratio
+mpiprint(D)
 #If not including nabla field
 #growthratvec = np.array([1, D, D**2, D**2, D**3, D**4, D**2, D**3, D**4, D**4])
 
@@ -279,11 +289,7 @@ for i in range(5):
 kpkvec = np.array(kpkvec)
 #rxivec = np.array(rxivec)
 if rank==0:
-    if 'Test' in testvar:
-
-        np.savetxt(componentdir+'lakelag_mpi_pk_box%s_a%.2f_nmesh%s.txt'%(testvar,box_scale,nmesh), kpkvec)
-    else:
-        np.savetxt(componentdir+'lakelag_mpi_pk_box%s_a%.2f_nmesh%s.txt'%(boxno,box_scale,nmesh), kpkvec)
+    np.savetxt(componentdir+'lakelag_mpi_pk_box%s_a%.2f_nmesh%s.txt'%(boxno,box_scale,nmesh), kpkvec)
     #np.savetxt(componentdir+'lakelag_mpi_xi_box%s_snap%s_nmesh%s.txt'%(boxno,snapdir,nmesh), rxivec)
     # os.system('rm -r '+componentdir+'reshape_componentfields_*')
     #os.system('rm -r '+componentdir+'componentfields_*')
