@@ -46,10 +46,10 @@ emu_spec = emu.predict(k, cosmo_vec)
 
 ```
 
-The default emulator makes predictions as a function of \\(\Omega_b h^2,\, \Omega_c h^2,\, w,\, n_s,\, \sigma_8,\, H_0,\, N_{\rm eff},\, a\\) in that order, which
+The default emulator makes predictions as a function of (\Omega_b h^2, \Omega_c h^2, w, n_s, \sigma_8, H_0, N_{\rm eff}, a) in that order, which
 is what is specified by `cosmo_vec`. This needs to be a two dimensional array, whose number of rows is the number of cosmologies you would like to make predictions
 at.
-You will also need to provide an array of wavenumbers that you want to compute spectra at, which should be in units of \\(h^{-1}\rm Mpc\\).
+You will also need to provide an array of wavenumbers that you want to compute spectra at, which should be in units of Mpc/h.
 
 See `notebooks/train_and_predict.ipynb` for more worked examples for how to use the code.
 
