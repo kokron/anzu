@@ -10,7 +10,7 @@ Measurements and emulation of Lagrangian bias models for clustering and lensing 
 
 The first part of the code, in the `fields` directory, measures the hybrid "basis functions" defined in the model of [Modi et al. 2020](https://arxiv.org/abs/1910.07097) and [Kokron et al. 2021.](https://arxiv.org/abs/2101.11014) The second part, in the `anzu` directory, takes measurements of these basis functions and constructs an emulator to obtain predictions from them at any cosmology (within the bounds of the training set). 
 
-It's self-contained such that given a set of N-body simulations used to build emulators you should be able to measure basis functions. Alternatively, if you have your own measurements of the basis functions, the code here should in principle be useful for construction of your own emulator. 
+The code is self-contained such that given a set of N-body simulations used to build emulators you should be able to measure basis functions. Alternatively, if you have your own measurements of the basis functions, the code here should in principle be useful for construction of your own emulator. 
 
 
 # Installation
