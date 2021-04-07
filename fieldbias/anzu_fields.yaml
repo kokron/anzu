@@ -4,24 +4,24 @@
 icdir:
 
 #Output directory where all products should be saved
-outdir:
+outdir: '/home/users/kokron/scratch/ptbias_emu/Box1/'
 
 #Directory with gadget snapshot files 
-particledir:
+particledir: '/oak/stanford/orgs/kipac/aemulus/aemulus_alpha/Box001/output/snapdir_009/snapshot_009.'
 
 ##Simulation parameters
 
 #mesh size used to generate ICs
-nmesh_in:
+nmesh_in: 1400
 
 #mesh size to output the final fields/measure p(k)
-nmesh_out:
+nmesh_out: 1400
 
 #Size of the simulation box in Mpc/h
-lbox:
+lbox: 1050
 
 #Initial redshift of the box
-z_ic:
+z_ic: 49
 
 #Scale factor at the snapshot you're running the measurements
 snap_scale:
@@ -34,17 +34,17 @@ compensate: True
 #'Gadget' or 'FastPM'. For now only 'Gadget' is supported. Sorry!
 sim_type: 'Gadget'
 
-#Also write the IC weight fields as numpy arrays and not only h5 files? This will just take up a lot of space!
-np_weightfields: False
+#Write the IC weight fields as numpy arrays instead of h5 files. This will just take more time and delete the hdf5 file.
+np_weightfields: True
 
 
 ##Aemulus-specific params
 
 #Is this from the test set?
-test:
+aem_test:
 
 #Which box is this? XXX in BoxXXX or TestBoxXXX-YYY
-box:
+aem_box: 1
 #This is YYY
-testno: 
+aem_testno: 
 

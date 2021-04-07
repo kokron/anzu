@@ -220,7 +220,7 @@ if __name__ == "__main__":
  
     nablasq = delta_to_gradsqdelta(deltak, nmesh, Lbox, rank, nranks, fft)
 
-    v[:] = tinyfft
+    v[:] = nablasq 
 
     v.write(lindir+'mpi_icfields_nmesh%s.h5'%nmesh, 'nablasq', step=2)
     #Moar space
@@ -245,7 +245,7 @@ if __name__ == "__main__":
                 gc.collect()
                 get_memory()
             #Deletes the hdf5 file 
-                os.system('rm '+lindir+'mpi_icfields_nmesh%s.h5'%nmesh)
+            os.system('rm '+lindir+'mpi_icfields_nmesh%s.h5'%nmesh)
     else: 
         if rank==0:
             print('Wrote successfully! Took %d seconds'%(time.time() - start_time))
