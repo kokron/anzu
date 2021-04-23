@@ -46,6 +46,18 @@ emu_spec = emu.predict(k, cosmo_vec)
 
 ```
 
+Folding in your favorite set of bias parameters to generate predictions for halo-halo and halo-matter power spectra is also simple!
+
+```python
+
+#UNIT-redmagic bias parameters from 2101.11014
+#         b1,    b2,    bs2,   bnabla2, SN
+bvec = [0.786, 0.583, -0.406, -0.512, 1755]
+
+biased_spec = emu.basis_to_full(k, bvec, emu_spec[0])
+
+```
+
 The default emulator makes predictions as a function of (\Omega_b h^2, \Omega_c h^2, w, n_s, \sigma_8, H_0, N_{\rm eff}, a) in that order, which
 is what is specified by `cosmo_vec`. This needs to be a two dimensional array, whose number of rows is the number of cosmologies you would like to make predictions
 at.
