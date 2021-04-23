@@ -599,6 +599,96 @@ class LPTEmulator(object):
 
         return pk_emu
 
+    def basis_to_full(self, k, btheta, emu_spec, halomatter=True):
+        '''
+        Take an LPTemulator.predict() array and combine with bias parameters to obtain predictions for P_hh and P_hm. 
+        
+        
+        Inputs:
+        -k: set of wavenumbers used to generate emu_spec.
+        -btheta: vector of bias + shot noise. See notes below for structure of terms
+        -emu_spec: output of LPTemu.predict() at a cosmology / set of k values
+        -halomatter: whether we compute only P_hh or also P_hm
+        
+        Outputs:
+        -pfull: P_hh (k) or a flattened [P_hh (k),P_hm (k)] for given spectrum + bias params.
+        
+        
+        Notes:
+        Bias parameters can either be
+        
+        btheta = [b1, b2, bs2, SN]
+        
+        or
+        
+        btheta = [b1, b2, bs2, bnabla2, SN]
+        
+        Where SN is a constant term, and the bnabla2 terms follow the approximation
+        
+        <X, nabla^2 delta> ~ -k^2 <X, 1>. 
+        
+        Note the term <nabla^2, nabla^2> isn't included in the prediction since it's degenerate with even higher deriv
+        terms such as <nabla^4, 1> which in principle have different parameters. 
+        
+        
+        To-do:
+        Include actual measured nabla^2 correlators once the normalization issue has been properly worked out.
+        
+        '''        
+        if len(btheta) == 4:
+            b1, b2, bs, sn = btheta
+            #Cross-component-spectra are multiplied by 2, b_2 is 2x larger than in velocileptors
+            bterms_hh = [1, 
+                         2*b1 , b1**2   , 
+                         b2   , b2*b1   , 0.25*b2**2, 
+                         2*bs , 2*bs*b1 , bs*b2     , bs**2]
+        
+            #hm correlations only have one kind of <1,delta_i> correlation
+            bterms_hm = [1   , 
+                         b1  , 0,
+                         b2/2, 0, 0,
+                         bs  , 0, 0, 0]
+            
+            pkvec = emu_spec
+
+        else:
+            b1, b2, bs, bk2, sn = btheta
+            #Cross-component-spectra are multiplied by 2, b_2 is 2x larger than in velocileptors
+            bterms_hh = [1, 
+                         2*b1 , b1**2   , 
+                         b2   , b2*b1   , 0.25*b2**2, 
+                         2*bs , 2*bs*b1 , bs*b2     , bs**2, 
+                         2*bk2, 2*bk2*b1, bk2*b2    , 2*bk2*bs]
+        
+            #hm correlations only have one kind of <1,delta_i> correlation
+            bterms_hm = [1   , 
+                         b1  , 0,
+                         b2/2, 0, 0,
+                         bs  , 0, 0, 0,
+                         bk2 , 0, 0, 0]
+            
+            pkvec = np.zeros(shape=(14, len(k)))
+            pkvec[:10] = emu_spec
+            
+            #IDs for the <nabla^2, X> ~ -k^2 <1, X> approximation.
+            nabla_idx = [0, 1, 3, 6]
+            
+            #Higher derivative terms
+            pkvec[10:] = -k**2 * pkvec[nabla_idx]      
+            
+        bterms_hh = np.array(bterms_hh)
+        
+        
+        p_hh = np.einsum('b, bk->k', bterms_hh, pkvec) + sn
+        pfull = p_hh
+        
+        if halomatter:
+            bterms_hm = np.array(bterms_hm)
+            p_hm = np.einsum('b, bk->k', bterms_hm,pkvec)
+            pfull = np.hstack([p_hh, p_hm])   
+            
+        return pfull
+
     def _pce_predict(self, k, cosmo, lambda_pce=None, spectra_lpt=None,
                      evec_spec=None, simoverlpt=None, timing=False):
         '''
