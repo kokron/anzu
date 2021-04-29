@@ -3,7 +3,9 @@ import os
 import numpy as np
 import pyccl as ccl
 import chaospy as cp
-import velocileptors.LPT.cleft_fftw as cleft
+from velocileptors.LPT.cleft_fftw import CLEFT
+from velocileptors.EPT.cleft_kexpanded_resummed_fftw import RKECLEFT
+
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 
@@ -41,7 +43,7 @@ class LPTEmulator(object):
                  smooth_spectra=True, window=11, savgol_order=3,
                  kmin=0.1, kmax=1.0, extrap=True, kmin_pl=0.5, kmax_pl=0.6,
                  use_physical_densities=True, usez=False, zmax=2.0,
-                 use_sigma_8=True, forceLPT=True, offset=False, tanh=True):
+                 use_sigma_8=True, forceLPT=True, offset=False, tanh=True, kecleft=False):
         """
         Initialize the emulator object. Default values for all kwargs were
         used for fiducial results in 2101.11014, so don't change these unless
@@ -93,6 +95,11 @@ class LPTEmulator(object):
             forceLPT : bool
             offset : bool
             tanh : bool
+            kecleft: bool
+                Sets whether to use "full" CLEFT or "k-expanded" CLEFT to make LPT predictions. 
+                KECLEFT mode allows you to quickly compute spectra at fixed cosmology as a function
+                of redshift.
+
 
         """
 
@@ -128,21 +135,36 @@ class LPTEmulator(object):
         self.offset = offset
         self.tanh = tanh
 
+        #KECLEFT attributes
+        self.kecleft = kecleft
+        self.last_LPTcosmo = None
+        self.last_cleftobj = None
+
         self._build_emulator()
 
     def _cleft_pk(self, cosmovec, snapscale):
         '''
-        Returns a spline object which computes the cleft component spectra
+        Returns a spline object which computes the cleft component spectra. Computed either in
+        "full" CLEFT or in "k-expanded" CLEFT which allows for faster redshift dependence.
         Args:
             cosmovec : array-like
                 Vector containing cosmology in the order (ombh2, omch2, w0, ns, sigma8, H0, Neff).
                 If self.use_sigma_8 != True, then ln(A_s/10^{-10}) should be provided instead of sigma8.
             snapscale : float
                 scale factor
+            kecleft: bool
+                Bool to check if the calculation is being made with 
         Returns:
             cleft_aem : InterpolatedUnivariateSpline 
                 Spline that computes basis spectra as a function of k
         '''
+
+
+
+
+
+
+
         if self.use_physical_densities:
             if self.use_sigma_8:
                 cosmo = ccl.Cosmology(Omega_b=cosmovec[0] / (cosmovec[5] / 100)**2,
@@ -172,18 +194,51 @@ class LPTEmulator(object):
                                       w0=cosmovec[2], Neff=cosmovec[6],
                                       A_s=np.exp(cosmovec[4]) * 1e-10)
 
+
+
+
+
         k = np.logspace(-3, 1, 1000)
-        pk = ccl.linear_matter_power(
-            cosmo, k * cosmo['h'], snapscale) * (cosmo['h'])**3
-        cleftobj = cleft.CLEFT(k, pk, N=2700, jn=10, cutoff=1)
-        cleftobj.make_ptable()
-        cleftpk = cleftobj.pktable.T
 
-        # Different cutoff for other spectra, because otherwise different
-        # large scale asymptote
+        if self.kecleft:
+            #If using kecleft, check that we're only varying the redshift
 
-        cleftobj = cleft.CLEFT(k, pk, N=2700, jn=5, cutoff=10)
-        cleftobj.make_ptable()
+            if cosmovec == self.last_LPTcosmo:
+                #Take the last kecleft object used
+                cleftobj = self.last_cleftobj
+
+            else:
+                #Do the full calculation again, as the cosmology changed.
+                pk = ccl.linear_matter_power(
+                    cosmo, k * cosmo['h'], 1) * (cosmo['h'])**3 
+
+                #Function to obtain the no-wiggle spectrum.               
+                pnw = p_nwify(pk)
+
+                cleftobj = RKECLEFT(k, pk, pnw = pnw)
+
+                self.last_cleftobj = cleftobj
+
+            #Adjust growth factors
+            D = ccl.background.growth_factor(cosmo, snapscale)
+            cleftobj.make_ptable(D=D_,kmin=k[0],kmax=k[-1],nk=1000)
+            cleftpk = cleftobj.pktable.T
+
+        else:
+            #Using "full" CLEFT, have to always do calculation from scratch
+            pk = ccl.linear_matter_power(
+                cosmo, k * cosmo['h'], snapscale) * (cosmo['h'])**3
+            cleftobj = CLEFT(k, pk, N=2700, jn=10, cutoff=1)
+            cleftobj.make_ptable()
+
+            cleftpk = cleftobj.pktable.T
+
+            # Different cutoff for other spectra, because otherwise different
+            # large scale asymptote
+
+            cleftobj = CLEFT(k, pk, N=2700, jn=5, cutoff=10)
+            cleftobj.make_ptable()
+
         cleftpk[3:, :] = cleftobj.pktable.T[3:, :]
         cleftpk[2, :] /= 2
         cleftpk[6, :] /= 0.25
@@ -191,6 +246,11 @@ class LPTEmulator(object):
         cleftpk[8, :] /= 2
 
         cleftspline = interp1d(cleftpk[0], cleftpk, fill_value='extrapolate')
+
+        #Store last cosmology used
+        self.last_LPTcosmo = cosmovec
+
+
         return cleftspline
 
     def _powerlaw_extrapolation(self, spectra, k=None):
@@ -600,41 +660,41 @@ class LPTEmulator(object):
         return pk_emu
 
     def basis_to_full(self, k, btheta, emu_spec, halomatter=True):
-        '''
+        """
         Take an LPTemulator.predict() array and combine with bias parameters to obtain predictions for P_hh and P_hm. 
-        
-        
+
+
         Inputs:
         -k: set of wavenumbers used to generate emu_spec.
         -btheta: vector of bias + shot noise. See notes below for structure of terms
         -emu_spec: output of LPTemu.predict() at a cosmology / set of k values
         -halomatter: whether we compute only P_hh or also P_hm
-        
+
         Outputs:
         -pfull: P_hh (k) or a flattened [P_hh (k),P_hm (k)] for given spectrum + bias params.
-        
-        
+
+
         Notes:
         Bias parameters can either be
-        
+
         btheta = [b1, b2, bs2, SN]
-        
+
         or
-        
+
         btheta = [b1, b2, bs2, bnabla2, SN]
-        
+
         Where SN is a constant term, and the bnabla2 terms follow the approximation
-        
+
         <X, nabla^2 delta> ~ -k^2 <X, 1>. 
-        
+
         Note the term <nabla^2, nabla^2> isn't included in the prediction since it's degenerate with even higher deriv
         terms such as <nabla^4, 1> which in principle have different parameters. 
-        
-        
+
+
         To-do:
         Include actual measured nabla^2 correlators once the normalization issue has been properly worked out.
-        
-        '''        
+
+        """
         if len(btheta) == 4:
             b1, b2, bs, sn = btheta
             #Cross-component-spectra are multiplied by 2, b_2 is 2x larger than in velocileptors
@@ -760,7 +820,6 @@ class LPTEmulator(object):
 
         simoverlpt_emu = np.einsum('bkp, cbp->cbk', evecs, lambda_pce)
 
-        # Enforce agreement with LPT at large scales
         if spectra_lpt is None:
             ncosmos = len(cosmo)
             spectra_lpt = np.zeros((ncosmos, 10, len(self.k)))
