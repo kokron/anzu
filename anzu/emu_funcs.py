@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pyccl as ccl
 import chaospy as cp
+import warnings
 from velocileptors.LPT.cleft_fftw import CLEFT
 from velocileptors.EPT.cleft_kexpanded_resummed_fftw import RKECLEFT
 
@@ -128,7 +129,6 @@ class LPTEmulator(object):
         self.kmin_pl = kmin_pl
         self.kmax_pl = kmax_pl
         self.forceLPT = forceLPT
-        self._load_data(None)
 
         self.param_mean = None
         self.param_mult = None
@@ -139,6 +139,13 @@ class LPTEmulator(object):
         self.kecleft = kecleft
         self.last_LPTcosmo = None
         self.last_cleftobj = None
+        if self.kecleft and self.extrap:
+            warnings.warn("kecleft and extrap are both set. Setting extrap to False.")
+        if self.kecleft:
+            self.lpt_training_data_file = 'kecleft_spectra.npy'
+            self.extrap = False
+
+        self._load_data(None)
 
         self._build_emulator()
 
@@ -203,7 +210,7 @@ class LPTEmulator(object):
         if self.kecleft:
             #If using kecleft, check that we're only varying the redshift
 
-            if cosmovec == self.last_LPTcosmo:
+            if (cosmovec == self.last_LPTcosmo).all():
                 #Take the last kecleft object used
                 cleftobj = self.last_cleftobj
 
@@ -212,16 +219,17 @@ class LPTEmulator(object):
                 pk = ccl.linear_matter_power(
                     cosmo, k * cosmo['h'], 1) * (cosmo['h'])**3 
 
-                #Function to obtain the no-wiggle spectrum.               
-                pnw = p_nwify(pk)
-
-                cleftobj = RKECLEFT(k, pk, pnw = pnw)
+                #Function to obtain the no-wiggle spectrum.
+                # Not implemented yet, maybe Wallisch maybe B-Splines?               
+                # pnw = p_nwify(pk)
+                #For now just use Stephen's standard savgol implementation.
+                cleftobj = RKECLEFT(k, pk)
 
                 self.last_cleftobj = cleftobj
 
             #Adjust growth factors
             D = ccl.background.growth_factor(cosmo, snapscale)
-            cleftobj.make_ptable(D=D_,kmin=k[0],kmax=k[-1],nk=1000)
+            cleftobj.make_ptable(D=D,kmin=k[0],kmax=k[-1],nk=1000)
             cleftpk = cleftobj.pktable.T
 
         else:
@@ -376,6 +384,7 @@ class LPTEmulator(object):
 
         # apply power law extrapolation to LPT spectra where they diverge at high k
         if self.extrap:
+
             spectra_lpt = self._powerlaw_extrapolation(spectra_lpt)
 
         simoverlpt = self._ratio_and_smooth(spectra_aem, spectra_lpt)
@@ -822,12 +831,12 @@ class LPTEmulator(object):
 
         if spectra_lpt is None:
             ncosmos = len(cosmo)
-            spectra_lpt = np.zeros((ncosmos, 10, len(self.k)))
-            spectra_lpt = np.zeros((ncosmos, 10, len(self.k)))
+            spectra_lpt = np.zeros((ncosmos, 10, len(k)))
+            spectra_lpt = np.zeros((ncosmos, 10, len(k)))
 
             for i in range(ncosmos):
                 spectra_lpt[i, :, :] = self._cleft_pk(cosmo[i, :-1],
-                                                      cosmo[i, -1])(self.k)[1:11, :]
+                                                      cosmo[i, -1])(k)[1:11, :]
         if self.extrap:
             spectra_lpt = self._powerlaw_extrapolation(spectra_lpt, k)
 
@@ -835,6 +844,7 @@ class LPTEmulator(object):
         pk_emu[:] = spectra_lpt
         # Enforce agreement with LPT
         if self.forceLPT:
+
             pk_emu[..., k > self.kmin] = (
                 10**(simoverlpt_emu) * pk_emu)[..., k > self.kmin]
         else:
