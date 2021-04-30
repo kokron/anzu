@@ -798,6 +798,11 @@ class LPTEmulator(object):
         cosmo_scaled = (
             cosmo - self.param_mean[np.newaxis, :]) * self.param_mult[np.newaxis, :]
 
+        #Are you providing spectra at different values of k than desired?
+        if spectra_lpt is not None:
+            if spectra_lpt.shape[-1] != len(k) and self.extrap == False:
+                raise(ValueError(
+                    "Trying to feed in lpt spectra computed at different k than the desired outcome!"))
         # if we already have PCs, just make prediction using them
         if lambda_pce is None:
 
@@ -831,20 +836,31 @@ class LPTEmulator(object):
 
         if spectra_lpt is None:
             ncosmos = len(cosmo)
-            spectra_lpt = np.zeros((ncosmos, 10, len(k)))
-            spectra_lpt = np.zeros((ncosmos, 10, len(k)))
 
-            for i in range(ncosmos):
-                spectra_lpt[i, :, :] = self._cleft_pk(cosmo[i, :-1],
-                                                      cosmo[i, -1])(k)[1:11, :]
+            if self.extrap:
+                #Compute at original binning so extrapolation rebins
+                spectra_lpt = np.zeros((ncosmos, 10, len(self.k)))
+                spectra_lpt = np.zeros((ncosmos, 10, len(self.k)))
+
+                for i in range(ncosmos):
+                    spectra_lpt[i, :, :] = self._cleft_pk(cosmo[i, :-1],
+                                                          cosmo[i, -1])(self.k)[1:11, :]
+            else:
+                #Compute at desired bining directly
+                spectra_lpt = np.zeros((ncosmos, 10, len(k)))
+                spectra_lpt = np.zeros((ncosmos, 10, len(k)))
+
+                for i in range(ncosmos):
+                    spectra_lpt[i, :, :] = self._cleft_pk(cosmo[i, :-1],
+                                                          cosmo[i, -1])(k)[1:11, :]
         if self.extrap:
+            #Extrap and rebin.
             spectra_lpt = self._powerlaw_extrapolation(spectra_lpt, k)
 
         pk_emu = np.zeros_like(spectra_lpt)
         pk_emu[:] = spectra_lpt
         # Enforce agreement with LPT
         if self.forceLPT:
-
             pk_emu[..., k > self.kmin] = (
                 10**(simoverlpt_emu) * pk_emu)[..., k > self.kmin]
         else:
