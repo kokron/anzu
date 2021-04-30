@@ -35,11 +35,11 @@ class LPTEmulator(object):
 
     """ Main emulator object """
 
-    def __init__(self, nbody_training_data_file='spectra_aem_compensated.npy',
-                 lpt_training_data_file='cleft_spectra_twores.npy',
-                 kbin_file='kbins.npy',
+    def __init__(self, nbody_training_data_file=None,
+                 lpt_training_data_file=None,
+                 kbin_file=None,
                  zs=None,
-                 training_cosmo_file='cosmos.txt',
+                 training_cosmo_file=None,
                  surrogate_type='PCE',
                  smooth_spectra=True, window=11, savgol_order=3,
                  kmin=0.1, kmax=1.0, extrap=True, kmin_pl=0.5, kmax_pl=0.6,
@@ -104,6 +104,21 @@ class LPTEmulator(object):
 
         """
 
+        if nbody_training_data_file is None:
+            nbody_training_data_file = 'spectra_aem_compensated.npy'
+
+        if lpt_training_data_file is None:
+            if kecleft:
+                lpt_training_data_file = 'kecleft_spectra.npy'
+            else:
+                lpt_training_data_file = 'cleft_spectra_twores.npy'
+
+        if kbin_file is None:
+            kbin_file = 'kbins.npy'
+
+        if training_cosmo_file is None:
+            training_cosmo_file = 'cosmos.txt'
+
         self.nbody_training_data_file = nbody_training_data_file
         self.kbin_file = kbin_file
         self.lpt_training_data_file = lpt_training_data_file
@@ -135,17 +150,17 @@ class LPTEmulator(object):
         self.offset = offset
         self.tanh = tanh
 
-        #KECLEFT attributes
+        # KECLEFT attributes
         self.kecleft = kecleft
         self.last_LPTcosmo = None
         self.last_cleftobj = None
         if self.kecleft and self.extrap:
-            warnings.warn("kecleft and extrap are both set. Setting extrap to False.")
+            warnings.warn(
+                "kecleft and extrap are both set. Setting extrap to False.")
         if self.kecleft:
-            self.lpt_training_data_file = 'kecleft_spectra.npy'
             self.extrap = False
 
-        self._load_data(None)
+        self._load_data()
 
         self._build_emulator()
 
@@ -165,12 +180,6 @@ class LPTEmulator(object):
             cleft_aem : InterpolatedUnivariateSpline 
                 Spline that computes basis spectra as a function of k
         '''
-
-
-
-
-
-
 
         if self.use_physical_densities:
             if self.use_sigma_8:
@@ -201,39 +210,35 @@ class LPTEmulator(object):
                                       w0=cosmovec[2], Neff=cosmovec[6],
                                       A_s=np.exp(cosmovec[4]) * 1e-10)
 
-
-
-
-
         k = np.logspace(-3, 1, 1000)
 
         if self.kecleft:
-            #If using kecleft, check that we're only varying the redshift
+            # If using kecleft, check that we're only varying the redshift
 
             if (cosmovec == self.last_LPTcosmo).all():
-                #Take the last kecleft object used
+                # Take the last kecleft object used
                 cleftobj = self.last_cleftobj
 
             else:
-                #Do the full calculation again, as the cosmology changed.
+                # Do the full calculation again, as the cosmology changed.
                 pk = ccl.linear_matter_power(
-                    cosmo, k * cosmo['h'], 1) * (cosmo['h'])**3 
+                    cosmo, k * cosmo['h'], 1) * (cosmo['h'])**3
 
-                #Function to obtain the no-wiggle spectrum.
-                # Not implemented yet, maybe Wallisch maybe B-Splines?               
+                # Function to obtain the no-wiggle spectrum.
+                # Not implemented yet, maybe Wallisch maybe B-Splines?
                 # pnw = p_nwify(pk)
-                #For now just use Stephen's standard savgol implementation.
+                # For now just use Stephen's standard savgol implementation.
                 cleftobj = RKECLEFT(k, pk)
 
                 self.last_cleftobj = cleftobj
 
-            #Adjust growth factors
+            # Adjust growth factors
             D = ccl.background.growth_factor(cosmo, snapscale)
-            cleftobj.make_ptable(D=D,kmin=k[0],kmax=k[-1],nk=1000)
+            cleftobj.make_ptable(D=D, kmin=k[0], kmax=k[-1], nk=1000)
             cleftpk = cleftobj.pktable.T
 
         else:
-            #Using "full" CLEFT, have to always do calculation from scratch
+            # Using "full" CLEFT, have to always do calculation from scratch
             pk = ccl.linear_matter_power(
                 cosmo, k * cosmo['h'], snapscale) * (cosmo['h'])**3
             cleftobj = CLEFT(k, pk, N=2700, jn=10, cutoff=1)
@@ -255,9 +260,8 @@ class LPTEmulator(object):
 
         cleftspline = interp1d(cleftpk[0], cleftpk, fill_value='extrapolate')
 
-        #Store last cosmology used
+        # Store last cosmology used
         self.last_LPTcosmo = cosmovec
-
 
         return cleftspline
 
@@ -286,7 +290,7 @@ class LPTEmulator(object):
             spectra = specspline(k)
         return spectra
 
-    def _load_data(self, filename):
+    def _load_data(self):
 
         aem_file = '/'.join([os.path.dirname(os.path.realpath(__file__)),
                              'data',
@@ -706,56 +710,55 @@ class LPTEmulator(object):
         """
         if len(btheta) == 4:
             b1, b2, bs, sn = btheta
-            #Cross-component-spectra are multiplied by 2, b_2 is 2x larger than in velocileptors
-            bterms_hh = [1, 
-                         2*b1 , b1**2   , 
-                         b2   , b2*b1   , 0.25*b2**2, 
-                         2*bs , 2*bs*b1 , bs*b2     , bs**2]
-        
-            #hm correlations only have one kind of <1,delta_i> correlation
-            bterms_hm = [1   , 
-                         b1  , 0,
+            # Cross-component-spectra are multiplied by 2, b_2 is 2x larger than in velocileptors
+            bterms_hh = [1,
+                         2*b1, b1**2,
+                         b2, b2*b1, 0.25*b2**2,
+                         2*bs, 2*bs*b1, bs*b2, bs**2]
+
+            # hm correlations only have one kind of <1,delta_i> correlation
+            bterms_hm = [1,
+                         b1, 0,
                          b2/2, 0, 0,
-                         bs  , 0, 0, 0]
-            
+                         bs, 0, 0, 0]
+
             pkvec = emu_spec
 
         else:
             b1, b2, bs, bk2, sn = btheta
-            #Cross-component-spectra are multiplied by 2, b_2 is 2x larger than in velocileptors
-            bterms_hh = [1, 
-                         2*b1 , b1**2   , 
-                         b2   , b2*b1   , 0.25*b2**2, 
-                         2*bs , 2*bs*b1 , bs*b2     , bs**2, 
-                         2*bk2, 2*bk2*b1, bk2*b2    , 2*bk2*bs]
-        
-            #hm correlations only have one kind of <1,delta_i> correlation
-            bterms_hm = [1   , 
-                         b1  , 0,
+            # Cross-component-spectra are multiplied by 2, b_2 is 2x larger than in velocileptors
+            bterms_hh = [1,
+                         2*b1, b1**2,
+                         b2, b2*b1, 0.25*b2**2,
+                         2*bs, 2*bs*b1, bs*b2, bs**2,
+                         2*bk2, 2*bk2*b1, bk2*b2, 2*bk2*bs]
+
+            # hm correlations only have one kind of <1,delta_i> correlation
+            bterms_hm = [1,
+                         b1, 0,
                          b2/2, 0, 0,
-                         bs  , 0, 0, 0,
-                         bk2 , 0, 0, 0]
-            
+                         bs, 0, 0, 0,
+                         bk2, 0, 0, 0]
+
             pkvec = np.zeros(shape=(14, len(k)))
             pkvec[:10] = emu_spec
-            
-            #IDs for the <nabla^2, X> ~ -k^2 <1, X> approximation.
+
+            # IDs for the <nabla^2, X> ~ -k^2 <1, X> approximation.
             nabla_idx = [0, 1, 3, 6]
-            
-            #Higher derivative terms
-            pkvec[10:] = -k**2 * pkvec[nabla_idx]      
-            
+
+            # Higher derivative terms
+            pkvec[10:] = -k**2 * pkvec[nabla_idx]
+
         bterms_hh = np.array(bterms_hh)
-        
-        
+
         p_hh = np.einsum('b, bk->k', bterms_hh, pkvec) + sn
         pfull = p_hh
-        
+
         if halomatter:
             bterms_hm = np.array(bterms_hm)
-            p_hm = np.einsum('b, bk->k', bterms_hm,pkvec)
-            pfull = np.hstack([p_hh, p_hm])   
-            
+            p_hm = np.einsum('b, bk->k', bterms_hm, pkvec)
+            pfull = np.hstack([p_hh, p_hm])
+
         return pfull
 
     def _pce_predict(self, k, cosmo, lambda_pce=None, spectra_lpt=None,
@@ -798,7 +801,7 @@ class LPTEmulator(object):
         cosmo_scaled = (
             cosmo - self.param_mean[np.newaxis, :]) * self.param_mult[np.newaxis, :]
 
-        #Are you providing spectra at different values of k than desired?
+        # Are you providing spectra at different values of k than desired?
         if spectra_lpt is not None:
             if spectra_lpt.shape[-1] != len(k) and self.extrap == False:
                 raise(ValueError(
@@ -838,7 +841,7 @@ class LPTEmulator(object):
             ncosmos = len(cosmo)
 
             if self.extrap:
-                #Compute at original binning so extrapolation rebins
+                # Compute at original binning so extrapolation rebins
                 spectra_lpt = np.zeros((ncosmos, 10, len(self.k)))
                 spectra_lpt = np.zeros((ncosmos, 10, len(self.k)))
 
@@ -846,7 +849,7 @@ class LPTEmulator(object):
                     spectra_lpt[i, :, :] = self._cleft_pk(cosmo[i, :-1],
                                                           cosmo[i, -1])(self.k)[1:11, :]
             else:
-                #Compute at desired bining directly
+                # Compute at desired bining directly
                 spectra_lpt = np.zeros((ncosmos, 10, len(k)))
                 spectra_lpt = np.zeros((ncosmos, 10, len(k)))
 
@@ -854,7 +857,7 @@ class LPTEmulator(object):
                     spectra_lpt[i, :, :] = self._cleft_pk(cosmo[i, :-1],
                                                           cosmo[i, -1])(k)[1:11, :]
         if self.extrap:
-            #Extrap and rebin.
+            # Extrap and rebin.
             spectra_lpt = self._powerlaw_extrapolation(spectra_lpt, k)
 
         pk_emu = np.zeros_like(spectra_lpt)
