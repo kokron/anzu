@@ -156,9 +156,10 @@ if __name__ == "__main__":
     fft= PFFT(MPI.COMM_WORLD, N, axes=(0,1,2), dtype='float32', grid=(-1,))
 
     try:
+        #bigmesh = np.load(lindir+'delta_np.npy', mmap_mode='r')
         bigmesh = np.load(lindir+'linICfield.npy', mmap_mode='r')
     except:
-        print('Have you run ic_binary_to_field.py yet? Did not find the right file.')
+        print('Have you run ic_binary_to_field.py yet? Did not find the right file in ', lindir)
     #print(rank*nmesh//nranks,(rank+1)*nmesh//nranks)
     u = newDistArray(fft, False)
 

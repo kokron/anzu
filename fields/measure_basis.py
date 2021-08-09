@@ -42,8 +42,6 @@ def CompensateCICAliasing(w, v):
 yamldir = sys.argv[1]
 
 
-##PALLIATIVE 
-fieldnameadd = sys.argv[2]
 
 
 configs = yaml.load(open(yamldir, 'r'), yaml.FullLoader)
@@ -69,12 +67,12 @@ fdir = configs['particledir']
 
 #Save to wherever particles are
 componentdir = configs['outdir']
-boxno = configs['aem_box']
-try:
-    testvar = configs['aem_testno']
-except:
-    testvar = ''
 
+#Figure out box number, even if this is a test box the %3d number we get out is sufficient
+#to determine the cosmology. 
+boxno = int(configs['outdir'].split('Box')[1][:3])
+
+mpiprint('Boxno is %d'%(boxno))
 start_time = time.time()
 
 ################################################################################################
@@ -195,7 +193,7 @@ for k in range(len(fieldlist)):
         del w
         gc.collect()
 
-        get_memory(rank)
+        #get_memory(rank)
 
         pm.paint(p, out=fieldlist[k], mass = m, resampler='cic')
         sys.stdout.flush()
@@ -213,13 +211,20 @@ if rank==0:
     sys.stdout.flush()
 get_memory(rank)
 
+#Get the box redshift and cosmology to compute the growth factor. 
+
+#This is currently hard-coded to work with AEMULUS only. Make more general
+box_scale = readGadgetSnapshot(fdir+'0')[2]
+zbox = 1./box_scale - 1
+
+
 #Normalize and mean-subtract the normal aprticle field.
 fieldlist[0] = fieldlist[0]/fieldlist[0].cmean() - 1
 for k in range(len(fieldlist)):
     if rank==0:
         print(np.mean(fieldlist[k].value), np.std(fieldlist[k].value))
         sys.stdout.flush()
-    np.save(componentdir+'latetime_weight_%s_%s_%s_rank%s'%(k,nmesh,fieldnameadd,rank), fieldlist[k].value)
+    np.save(componentdir+'latetime_weight_%s_z%.2f_%s_rank%s'%(k,zbox,nmesh,rank), fieldlist[k].value)
     if compensate:
         fieldlist[k] = fieldlist[k].r2c()
         fieldlist[k] = fieldlist[k].apply(CompensateCICAliasing, kind='circular')
@@ -234,16 +239,12 @@ field_dict = {'1': fieldlist[0], r'$\delta_L$': fieldlist[1], r'$\delta^2$': fie
 labelvec = ['1',r'$\delta_L$',  r'$\delta^2$',  r'$s^2$',r'$\nabla^2\delta$']
 
 
-#Get the box redshift and cosmology to compute the growth factor. 
-#This is currently hard-coded to work with AEMULUS only. Make more general
-box_scale = readGadgetSnapshot(fdir+'0')[2]
-zbox = 1./box_scale - 1
 #Get growth factor 
 if 'Test' in fdir:
-    cosmofiles = pd.read_csv('/home/users/swmclau2/Git/pearce/pearce/mocks/test_cosmos.txt', sep=' ')
+    cosmofiles = pd.read_csv('/home/users/kokron/Libraries/anzu/anzu/data/test_cosmos.txt', sep=' ')
     boxcosmo = cosmofiles.iloc[boxno]
 else:
-    cosmofiles = pd.read_csv('/home/users/kokron/Projects/lakelag/cosmos.txt', sep=' ')
+    cosmofiles = pd.read_csv('/home/users/kokron/Libraries/anzu/anzu/data/cosmos.txt', sep=' ')
     boxcosmo = cosmofiles.iloc[boxno]
 cosmo = pyccl.Cosmology(Omega_b= boxcosmo['ombh2']/(boxcosmo['H0']/100)**2, Omega_c = boxcosmo['omch2']/(boxcosmo['H0']/100)**2, h = boxcosmo['H0']/100, n_s = boxcosmo['ns'], w0=boxcosmo['w0'], Neff=boxcosmo['Neff'],sigma8 = boxcosmo['sigma8'])
 
