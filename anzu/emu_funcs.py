@@ -41,7 +41,8 @@ class LPTEmulator(object):
                  smooth_spectra=True, window=11, savgol_order=3,
                  kmin=0.1, kmax=1.0, extrap=True, kmin_pl=0.5, kmax_pl=0.6,
                  use_physical_densities=True, usez=False, zmax=2.0,
-                 use_sigma_8=True, forceLPT=True, offset=False, tanh=True, kecleft=False):
+                 use_sigma_8=True, forceLPT=True, offset=False, tanh=True, kecleft=False,
+                 hyperparams=None):
         """
         Initialize the emulator object. Default values for all kwargs were
         used for fiducial results in 2101.11014, so don't change these unless
@@ -106,15 +107,16 @@ class LPTEmulator(object):
 
         if lpt_training_data_file is None:
             if kecleft:
-                lpt_training_data_file = 'kecleft_spectra.npy'
+                lpt_training_data_file = 'kecleft_spectra_43.npy'
             else:
-                lpt_training_data_file = 'cleft_spectra_twores.npy'
+                lpt_training_data_file = 'cleft_spectra_43.npy'
 
         if kbin_file is None:
             kbin_file = 'kbins.npy'
 
         if training_cosmo_file is None:
-            training_cosmo_file = 'cosmos.txt'
+            training_cosmo_file = 'cosmos_43.txt'
+
 
         self.nbody_training_data_file = nbody_training_data_file
         self.kbin_file = kbin_file
@@ -157,7 +159,7 @@ class LPTEmulator(object):
 
         self._load_data()
 
-        self._build_emulator()
+        self._build_emulator(hyperparams=hyperparams)
 
     def _powerlaw_extrapolation(self, spectra, k=None):
         '''    
@@ -298,8 +300,8 @@ class LPTEmulator(object):
         Xs = np.zeros((10, self.nk, self.nk))
         for i in range(10):
             Xs[i, :, :] = np.dot(simoverlpt[:, :, i, :].reshape(
-                self.nz * (nsim - self.degree_cv), -1).T,
-                simoverlpt[:, :, i, :].reshape(self.nz * (nsim - self.degree_cv), -1))
+                self.nz * (nsim), -1).T,
+                simoverlpt[:, :, i, :].reshape(self.nz * (nsim), -1))
 
         # PC basis for each type of spectrum, independent of z and cosmo
         evec_spec = np.zeros((10, self.nk, self.nk))
