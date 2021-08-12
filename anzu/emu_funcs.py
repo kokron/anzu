@@ -103,7 +103,7 @@ class LPTEmulator(object):
         """
 
         if nbody_training_data_file is None:
-            nbody_training_data_file = 'spectra_aem_compensated.npy'
+            nbody_training_data_file = 'spectra_aem_compensated_43.npy'
 
         if lpt_training_data_file is None:
             if kecleft:
