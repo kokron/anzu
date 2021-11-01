@@ -184,6 +184,8 @@ class LPTEmulator(object):
             specspline = interp1d(self.k, spectra, axis=-1,
                                   fill_value='extrapolate')
             spectra_out = specspline(k)
+        else:
+            spectra_out = 1.*spectra
         return spectra_out
 
     def _load_data(self):
