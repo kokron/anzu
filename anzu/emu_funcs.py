@@ -698,8 +698,7 @@ class LPTEmulator(object):
         evecs = self.evec_spline(k)
         cosmo_scaled = (
             cosmo - self.param_mean[np.newaxis, :]) * self.param_mult[np.newaxis, :]
-
-        if (k_lpt is not None) & ((k != k_lpt).any()):
+        if (k_lpt is not None) & (np.sum(k != k_lpt) > 0):
             lpt_interp = interp1d(k_lpt, spec_lpt, axis=-1,
                                   fill_value='extrapolate')
             spectra_lpt = lpt_interp(k)
